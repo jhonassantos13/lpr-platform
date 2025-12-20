@@ -1,0 +1,3 @@
+-- Placeholder migration.
+-- This migration already exists in the database (applied previously).
+-- We keep this file to sync local migration history with the database.

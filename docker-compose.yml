@@ -1,0 +1,179 @@
+services:
+  traefik:
+    image: traefik:v3.6.4
+    command:
+      # Dashboard
+      - "--api.dashboard=true"
+      - "--api.insecure=false"
+
+      # Providers
+      - "--providers.docker=true"
+      - "--providers.docker.endpoint=tcp://dockerproxy:2375"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+
+      # Entrypoints
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+
+      # HTTP → HTTPS redirect
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--entrypoints.web.http.redirections.entrypoint.permanent=true"
+
+      # Let's Encrypt
+      - "--certificatesresolvers.le.acme.httpchallenge=true"
+      - "--certificatesresolvers.le.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.le.acme.email=${LETSENCRYPT_EMAIL}"
+      - "--certificatesresolvers.le.acme.storage=/letsencrypt/acme.json"
+
+    ports:
+      - "80:80"
+      - "443:443"
+
+    volumes:
+      - "./traefik/letsencrypt:/letsencrypt"
+      - "./traefik/dynamic:/etc/traefik/dynamic"
+
+    depends_on:
+      - dockerproxy
+
+    restart: unless-stopped
+
+
+  dockerproxy:
+    image: tecnativa/docker-socket-proxy:latest
+    environment:
+      CONTAINERS: 1
+      SERVICES: 1
+      TASKS: 1
+      NETWORKS: 1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - "./postgres:/var/lib/postgresql/data"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} -h 127.0.0.1 -p 5432"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+
+  redis:
+    image: redis:7
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - "./redis:/data"
+    restart: unless-stopped
+
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+    volumes:
+      - "./rabbitmq:/var/lib/rabbitmq"
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.rabbitmq.rule=Host(`${RABBITMQ_HOST}`)"
+      - "traefik.http.routers.rabbitmq.entrypoints=websecure"
+      - "traefik.http.routers.rabbitmq.tls.certresolver=le"
+      - "traefik.http.services.rabbitmq-svc.loadbalancer.server.port=15672"
+      - "traefik.http.routers.rabbitmq.service=rabbitmq-svc"
+
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - "./minio:/data"
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+
+      # Console
+      - "traefik.http.routers.minio-console.rule=Host(`${MINIO_CONSOLE_HOST}`)"
+      - "traefik.http.routers.minio-console.entrypoints=websecure"
+      - "traefik.http.routers.minio-console.tls.certresolver=le"
+      - "traefik.http.services.minio-console-svc.loadbalancer.server.port=9001"
+      - "traefik.http.routers.minio-console.service=minio-console-svc"
+
+      # S3 API
+      - "traefik.http.routers.minio-s3.rule=Host(`${MINIO_S3_HOST}`)"
+      - "traefik.http.routers.minio-s3.entrypoints=websecure"
+      - "traefik.http.routers.minio-s3.tls.certresolver=le"
+      - "traefik.http.services.minio-s3-svc.loadbalancer.server.port=9000"
+      - "traefik.http.routers.minio-s3.service=minio-s3-svc"
+
+
+  api:
+    build:
+      context: ./app/lpr-api
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: ${DATABASE_URL}
+      APP_JWT_SECRET: ${APP_JWT_SECRET}
+
+      # RabbitMQ (IMPORTANTE)
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASS: ${RABBITMQ_PASS}
+      RABBITMQ_INTERNAL_HOST: rabbitmq
+      RABBITMQ_INTERNAL_PORT: 5672
+      RABBITMQ_QUEUE: lpr.events
+
+      # MinIO
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_S3_HOST: ${MINIO_S3_HOST}
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+      minio:
+        condition: service_started
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`${API_HOST}`)"
+      - "traefik.http.routers.api.entrypoints=websecure"
+      - "traefik.http.routers.api.tls.certresolver=le"
+      - "traefik.http.services.api-svc.loadbalancer.server.port=3000"
+      - "traefik.http.routers.api.service=api-svc"
+
+
+  migrate:
+    build:
+      context: ./app/lpr-api
+      dockerfile: Dockerfile
+      target: build
+    working_dir: /app
+    volumes:
+      - ./app/lpr-api:/app
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["npx", "prisma", "migrate", "dev", "--name", "init"]
+    restart: "no"

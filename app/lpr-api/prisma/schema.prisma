@@ -1,0 +1,31 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
+}
+
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Camera {
+  id        String   @id @default(uuid())
+  name      String
+  token     String   @unique
+  createdAt DateTime @default(now())
+  events    LprEvent[]
+}
+
+model LprEvent {
+  id         String   @id @default(uuid())
+  plate      String
+  confidence Float?
+  imageUrl   String?
+  cameraId   String
+  camera     Camera   @relation(fields: [cameraId], references: [id])
+  createdAt  DateTime @default(now())
+
+  @@index([plate])
+
+}
