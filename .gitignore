@@ -33,3 +33,8 @@ prompt-codex.txt
 *.bak.*
 docker-compose.yml.bak.*
 **/Dockerfile.bak.*
+
+# backups gerados na VPS
+*.bak.*
+docker-compose.yml.bak.*
+**/Dockerfile.bak.*
