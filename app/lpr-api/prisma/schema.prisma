@@ -3,17 +3,16 @@ generator client {
   binaryTargets = ["native", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
 }
 
-
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 model Camera {
-  id        String   @id @default(uuid())
+  id        String     @id @default(uuid())
   name      String
-  token     String   @unique
-  createdAt DateTime @default(now())
+  token     String     @unique
+  createdAt DateTime   @default(now())
   events    LprEvent[]
 }
 
@@ -26,6 +25,23 @@ model LprEvent {
   camera     Camera   @relation(fields: [cameraId], references: [id])
   createdAt  DateTime @default(now())
 
-  @@index([plate])
+  outbox LprEventOutbox?
 
+  @@index([plate])
+}
+
+model LprEventOutbox {
+  id          String    @id @default(uuid())
+  eventId     String    @unique
+  payload     Json
+  status      String    @default("PENDING")
+  attempts    Int       @default(0)
+  nextRetryAt DateTime?
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  event LprEvent @relation(fields: [eventId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([status, nextRetryAt])
+  @@index([createdAt])
 }

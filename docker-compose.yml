@@ -134,6 +134,7 @@ services:
       # RabbitMQ (IMPORTANTE)
       RABBITMQ_USER: ${RABBITMQ_USER}
       RABBITMQ_PASS: ${RABBITMQ_PASS}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
       RABBITMQ_INTERNAL_HOST: rabbitmq
       RABBITMQ_INTERNAL_PORT: 5672
       RABBITMQ_QUEUE: lpr.events
@@ -160,6 +161,39 @@ services:
       - "traefik.http.routers.api.tls.certresolver=le"
       - "traefik.http.services.api-svc.loadbalancer.server.port=3000"
       - "traefik.http.routers.api.service=api-svc"
+
+
+  worker:
+    build:
+      context: ./app/lpr-api
+      dockerfile: Dockerfile
+    command: ["node", "dist/src/worker.js"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      APP_JWT_SECRET: ${APP_JWT_SECRET}
+
+      # RabbitMQ
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASS: ${RABBITMQ_PASS}
+      RABBITMQ_INTERNAL_HOST: rabbitmq
+      RABBITMQ_INTERNAL_PORT: 5672
+      RABBITMQ_QUEUE: lpr.events
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+
+      # MinIO
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_S3_HOST: ${MINIO_S3_HOST}
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_started
+      minio:
+        condition: service_started
+    restart: unless-stopped
 
 
   migrate:

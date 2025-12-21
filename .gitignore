@@ -25,3 +25,6 @@ traefik/letsencrypt/
 .DS_Store
 .idea/
 .vscode/
+
+documentacao.txt
+prompt-codex.txt

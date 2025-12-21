@@ -38,5 +38,6 @@ COPY --from=build /app/dist ./dist
 COPY package*.json ./
 
 EXPOSE 3000
+COPY prisma ./prisma
 CMD ["node", "dist/src/main.js"]
 
