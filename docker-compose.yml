@@ -127,6 +127,9 @@ services:
       dockerfile: Dockerfile
     environment:
       NODE_ENV: production
+      ADMIN_API_KEY: ${ADMIN_API_KEY}
+      ANPR_RATE_TTL: ${ANPR_RATE_TTL:-60000}
+      ANPR_RATE_LIMIT: ${ANPR_RATE_LIMIT:-30}
       PORT: 3000
       DATABASE_URL: ${DATABASE_URL}
       APP_JWT_SECRET: ${APP_JWT_SECRET}
@@ -170,6 +173,9 @@ services:
     command: ["node", "dist/src/worker.js"]
     environment:
       NODE_ENV: production
+      ADMIN_API_KEY: ${ADMIN_API_KEY}
+      ANPR_RATE_TTL: ${ANPR_RATE_TTL:-60000}
+      ANPR_RATE_LIMIT: ${ANPR_RATE_LIMIT:-30}
       DATABASE_URL: ${DATABASE_URL}
       APP_JWT_SECRET: ${APP_JWT_SECRET}
 

@@ -1,0 +1,51 @@
+http:
+  middlewares:
+    admin-ipallowlist:
+      ipAllowList:
+        sourceRange:
+          - "177.185.208.0/20"
+          - "168.90.16.0/23"
+          - "187.110.163.243/32"
+
+    admin-basicauth:
+      basicAuth:
+        users:
+          - "admin:$2y$05$O6NOlvJTGb8cMkw1isgI4uejriGloCyQmteQISpiXQlRA7ekaUV0m"
+
+    # middleware para bloquear tudo (ninguém cai no allowlist)
+    admin-deny-all:
+      ipAllowList:
+        sourceRange:
+          - "255.255.255.255/32"
+          - "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff/128"
+
+  routers:
+    # Admin SOMENTE no subdomínio
+    api-admin-subdomain:
+      rule: "Host(`admin-api.lincemedia.com.br`) && PathPrefix(`/admin`)"
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: le
+      priority: 2100
+      middlewares:
+        - admin-ipallowlist
+        - admin-basicauth
+      service: api-service
+
+    # Bloqueia /admin no host público (403)
+    api-admin-deny:
+      rule: "Host(`api.lincemedia.com.br`) && PathPrefix(`/admin`)"
+      entryPoints:
+        - websecure
+      tls: {}
+      priority: 2200
+      middlewares:
+        - admin-deny-all
+      service: api-service
+
+  services:
+    api-service:
+      loadBalancer:
+        servers:
+          - url: "http://api:3000"

@@ -12,6 +12,7 @@ model Camera {
   id        String     @id @default(uuid())
   name      String
   token     String     @unique
+  allowedCidrs String[]   @default([])
   createdAt DateTime   @default(now())
   events    LprEvent[]
 }
