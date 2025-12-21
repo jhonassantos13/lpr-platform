@@ -38,6 +38,9 @@ model LprEventOutbox {
   attempts    Int       @default(0)
   nextRetryAt DateTime?
   publishedAt DateTime?
+  lockedAt   DateTime?
+  lockedBy   String?
+  lastError  String?
   createdAt   DateTime  @default(now())
 
   event LprEvent @relation(fields: [eventId], references: [id], onDelete: Restrict, onUpdate: Cascade)

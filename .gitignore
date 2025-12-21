@@ -28,3 +28,8 @@ traefik/letsencrypt/
 
 documentacao.txt
 prompt-codex.txt
+
+# backups gerados na VPS
+*.bak.*
+docker-compose.yml.bak.*
+**/Dockerfile.bak.*
